@@ -8,10 +8,11 @@ import { Input, Label, Select, Textarea } from "@/components/ui/Field";
 import {
   EmptyState,
   ErrorBanner,
+  KpiCard,
   PageHeader,
   Skeleton,
 } from "@/components/ui/Page";
-import { InclusionChips, TagInput } from "@/components/ui/TagInput";
+import { TagInput } from "@/components/ui/TagInput";
 import {
   createNight,
   listMenus,
@@ -22,7 +23,6 @@ import {
   formatNightWhen,
   moneyInr,
   paymentTypeLabel,
-  splitInclusions,
   statusLabel,
   tableTypeLabel,
 } from "@/lib/format";
@@ -98,7 +98,6 @@ export default function NightsPage() {
       new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
   );
   const menus = menusRes.data ?? [];
-  /** Only published menus can go on a bookable night. */
   const publishedMenus = useMemo(
     () => menus.filter((m) => menuStatus(m) === "PUBLISHED"),
     [menus],
@@ -108,7 +107,14 @@ export default function NightsPage() {
     [publishedMenus, menuId],
   );
 
-  /** Soft warn: same published menu on the same calendar day (not a hard block). */
+  const activeNights = nights.filter((n) => n.status !== "CANCELLED");
+  const bookable = activeNights.filter(
+    (n) => n.status === "OPEN" || n.status === "FULL",
+  );
+  const seatsLeft = bookable.reduce((s, n) => s + n.seatsLeft, 0);
+  const seatsTaken = bookable.reduce((s, n) => s + n.seatsTaken, 0);
+  const capacityTotal = bookable.reduce((s, n) => s + n.capacity, 0) || 1;
+
   const duplicateNightHint = useMemo(() => {
     if (!menuId || !startsLocal) return null;
     const day = localDayKey(startsLocal);
@@ -118,13 +124,13 @@ export default function NightsPage() {
       return localDayKey(n.startsAt) === day;
     });
     if (hits.length === 0) return null;
-    const when = formatNightWhen(hits[0].startsAt);
-    return `Heads up: ${selectedMenu?.name ?? "this menu"} is already on ${when}. Reusing the package is fine — only skip if you meant a different night.`;
-  }, [menuId, startsLocal, nights, selectedMenu?.name]);
+    return `Same menu already on ${formatNightWhen(hits[0].startsAt)} — fine if intentional.`;
+  }, [menuId, startsLocal, nights]);
 
   function applyMenu(id: string) {
     setMenuId(id);
-    const menu = publishedMenus.find((m) => m.id === id) ?? menus.find((m) => m.id === id);
+    const menu =
+      publishedMenus.find((m) => m.id === id) ?? menus.find((m) => m.id === id);
     if (!menu) return;
     const fromMenu = menuCourses(menu);
     if (fromMenu.length) setInclusions(fromMenu);
@@ -147,7 +153,7 @@ export default function NightsPage() {
     if (!preselectMenuId || menusRes.loading) return;
     if (!publishedMenus.some((m) => m.id === preselectMenuId)) {
       setFormError(
-        "That menu isn’t published yet. Publish it under Set menus first.",
+        "That menu isn’t published yet. Publish it under Menus first.",
       );
       return;
     }
@@ -155,8 +161,12 @@ export default function NightsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectMenuId, menusRes.loading, publishedMenus.length]);
 
-  function onMenuChange(id: string) {
-    applyMenu(id);
+  function resetFormFields() {
+    setStartsLocal("");
+    setSeatPrice("");
+    setCapacity("6");
+    setVibeCopy("");
+    setInclusions([]);
   }
 
   async function onCreate(e: FormEvent) {
@@ -169,7 +179,7 @@ export default function NightsPage() {
       return;
     }
     if (!menuId) {
-      setFormError("Pick a menu — guests need to know what’s on the table.");
+      setFormError("Pick a published menu.");
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
@@ -181,7 +191,7 @@ export default function NightsPage() {
       return;
     }
     if (inclusions.length === 0) {
-      setFormError("Add at least one inclusion (what’s provided on the table).");
+      setFormError("Add at least one inclusion.");
       return;
     }
     setBusy(true);
@@ -242,18 +252,10 @@ export default function NightsPage() {
     }
   }
 
-  function resetFormFields() {
-    setStartsLocal("");
-    setSeatPrice("");
-    setCapacity("6");
-    setVibeCopy("");
-    setInclusions([]);
-  }
-
   async function onCancelNight(night: NightRow) {
     if (night.seatsTaken > 0) {
       setFormError(
-        "Paid seats already exist — open Support so Admin can cancel/refund.",
+        "Paid seats already exist — open Contact NYTO so Admin can cancel/refund.",
       );
       return;
     }
@@ -281,12 +283,14 @@ export default function NightsPage() {
     }
   }
 
+  const loading = nightsRes.loading && !localNights;
+
   return (
-    <div className="v-rise mx-auto max-w-5xl">
+    <div className="v-rise mx-auto max-w-6xl">
       <PageHeader
         eyebrow="Bookable inventory"
         title="Publish nights"
-        description="A night is the bookable table. Pick a published menu (food package stays reused — no duplicate menus), set date, seats, and price. Guests book that night in the app."
+        description="Create the tables guests book in the app. Attach a published menu, set time, seats, and price."
         action={
           canPublish || mockMode ? (
             <Button
@@ -300,28 +304,74 @@ export default function NightsPage() {
       />
 
       {formError ? (
-        <div className="mt-4">
+        <div className="mt-6">
           <ErrorBanner message={formError} />
         </div>
       ) : null}
 
+      {loading ? (
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <KpiCard
+            label="Bookable nights"
+            value={bookable.length}
+            meta={`${activeNights.length} total on the board`}
+            progress={
+              activeNights.length
+                ? (bookable.length / activeNights.length) * 100
+                : 0
+            }
+            hint="Open or full · live in the app"
+            tone="accent"
+          />
+          <KpiCard
+            label="Seats left"
+            value={seatsLeft}
+            meta={`${seatsTaken} of ${capacityTotal} taken`}
+            progress={(seatsTaken / capacityTotal) * 100}
+            hint="Across all bookable nights"
+            tone="success"
+          />
+          <KpiCard
+            label="Fill rate"
+            value={`${Math.round((seatsTaken / capacityTotal) * 100)}%`}
+            meta={`${publishedMenus.length} published menus ready`}
+            progress={(seatsTaken / capacityTotal) * 100}
+            hint="Taken ÷ capacity"
+          />
+        </div>
+      )}
+
       {showForm ? (
         <form
           onSubmit={onCreate}
-          className="mt-6 space-y-5 rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-sm)]"
+          className="mt-8 rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-md)]"
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+          <p className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+            New night
+          </p>
+          <p className="mt-1 text-[14px] text-text-muted">
+            Guests book this date · menu stays reusable.
+          </p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="sm:col-span-3">
               <Label>Starts</Label>
               <Input
                 type="datetime-local"
                 value={startsLocal}
                 onChange={(e) => setStartsLocal(e.target.value)}
                 required
+                className="h-12"
               />
             </div>
             <div>
-              <Label>Seat price guests pay (₹)</Label>
+              <Label>Seat price (₹)</Label>
               <Input
                 inputMode="numeric"
                 value={seatPrice}
@@ -376,181 +426,186 @@ export default function NightsPage() {
                 <option value="PAY_OWN_BILL">Pay own bill</option>
               </Select>
             </div>
+            <div>
+              <Label>Published menu</Label>
+              <Select
+                value={menuId}
+                onChange={(e) => applyMenu(e.target.value)}
+                required
+              >
+                <option value="">Select…</option>
+                {publishedMenus.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-bg-soft/80 p-4">
-            <Label>Published menu on this table</Label>
-            <Select
-              value={menuId}
-              onChange={(e) => onMenuChange(e.target.value)}
-              required
-            >
-              <option value="">Select a published menu…</option>
-              {publishedMenus.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </Select>
-            {publishedMenus.length === 0 ? (
-              <p className="mt-2 text-[12px] text-warning">
-                No published menus yet. Go to Set menus → Publish menu first.
-              </p>
-            ) : null}
-            {selectedMenu ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-[13px] leading-relaxed text-text-muted">
-                  <span className="font-semibold text-ink">
-                    {selectedMenu.name}
-                  </span>
-                  {menuCourses(selectedMenu).length
-                    ? ` — ${menuCourses(selectedMenu).join(" · ")}`
-                    : null}
-                </p>
-                {menuCategories(selectedMenu).length ? (
-                  <p className="text-[12px] text-text-faint">
-                    Fits:{" "}
-                    {menuCategories(selectedMenu)
-                      .map((c) => tableTypeLabel(c))
-                      .join(" · ")}
-                    {menuCategories(selectedMenu).length === 1
-                      ? " · table type auto-set"
-                      : " · pick table type below"}
-                  </p>
-                ) : null}
-                <p className="text-[11px] text-text-faint">
-                  Menu is locked — food stays as published. Changing courses
-                  means a new menu under Set menus.
-                </p>
-              </div>
-            ) : (
-              <p className="mt-3 text-[12px] text-text-faint">
-                Create & publish menus under Set menus first.
-              </p>
-            )}
-            {duplicateNightHint ? (
-              <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-relaxed text-ink">
-                {duplicateNightHint}
-              </p>
-            ) : null}
-          </div>
-
-          <div>
-            <Label>What’s included on the table</Label>
-            <p className="mb-2 text-[12px] text-text-faint">
-              Courses, drinks, dessert — guests see these on the night. Press
-              Enter after each item.
+          {selectedMenu ? (
+            <p className="mt-3 text-[14px] text-text-muted">
+              <span className="font-semibold text-ink">{selectedMenu.name}</span>
+              {" — "}
+              {menuCourses(selectedMenu).join(" · ") || "No courses"}
             </p>
+          ) : null}
+          {duplicateNightHint ? (
+            <p className="mt-2 text-[13px] font-medium text-warning">
+              {duplicateNightHint}
+            </p>
+          ) : null}
+
+          <div className="mt-4">
+            <Label>What’s on the table</Label>
             <TagInput
               value={inclusions}
               onChange={setInclusions}
-              placeholder="e.g. Dum biryani"
+              placeholder="Course, press Enter"
             />
           </div>
 
-          <div>
+          <div className="mt-4">
             <Label>Vibe line (optional)</Label>
             <Textarea
               value={vibeCopy}
               onChange={(e) => setVibeCopy(e.target.value)}
               placeholder="Long table · strangers · one set menu"
-              className="min-h-[72px]"
+              className="min-h-[56px]"
               maxLength={180}
             />
           </div>
 
-          <Button type="submit" disabled={busy || publishedMenus.length === 0}>
-            {busy ? "Saving…" : "Publish night"}
-          </Button>
+          <div className="mt-5">
+            <Button
+              type="submit"
+              disabled={busy || publishedMenus.length === 0}
+              className="h-12 min-w-[160px] text-[15px]"
+            >
+              {busy ? "Saving…" : "Publish night"}
+            </Button>
+          </div>
         </form>
       ) : null}
 
-      <section className="mt-8">
-        {nightsRes.loading && !localNights ? (
-          <Skeleton className="h-48" />
+      <section className="mt-8 space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+            Nights on the board
+          </h2>
+          <p className="text-[13px] text-text-faint">
+            {nights.length} night{nights.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        {loading ? (
+          <Skeleton className="h-64" />
         ) : nights.length === 0 ? (
           <EmptyState
             title="No nights yet"
-            body="Publish a night with a menu and inclusions so guests can book in the app."
+            body="Schedule a night with a published menu so guests can book in the app."
           />
         ) : (
-          <ul className="space-y-3">
-            {nights.map((n) => {
-              const fill =
-                n.capacity > 0
-                  ? Math.round((n.seatsTaken / n.capacity) * 100)
-                  : 0;
-              const chips =
-                n.inclusions && n.inclusions.length
-                  ? n.inclusions
-                  : splitInclusions(n.menu?.description);
-              return (
-                <li
-                  key={n.id}
-                  className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-sm)]"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
+            <div className="hidden grid-cols-[1.1fr_1.3fr_0.7fr_0.7fr_0.85fr_auto] gap-3 border-b border-border-subtle bg-bg-soft/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-faint md:grid">
+              <span>When</span>
+              <span>Menu</span>
+              <span>Type</span>
+              <span>Price</span>
+              <span>Seats</span>
+              <span className="text-right">Status</span>
+            </div>
+            <ul>
+              {nights.map((n) => {
+                const fill =
+                  n.capacity > 0
+                    ? Math.round((n.seatsTaken / n.capacity) * 100)
+                    : 0;
+                const plate =
+                  n.inclusions?.length
+                    ? n.inclusions.join(" · ")
+                    : null;
+                return (
+                  <li
+                    key={n.id}
+                    className="grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[1.1fr_1.3fr_0.7fr_0.7fr_0.85fr_auto] md:items-center md:gap-3"
+                  >
                     <div>
-                      <p className="text-[20px] font-semibold tracking-[-0.03em] text-ink">
+                      <p className="text-[15px] font-semibold text-ink">
                         {formatNightWhen(n.startsAt)}
                       </p>
-                      <p className="mt-1 text-[13px] text-text-muted">
-                        {n.menu?.name ?? "No menu"} ·{" "}
-                        {tableTypeLabel(n.tableType)} ·{" "}
-                        {paymentTypeLabel(n.paymentType)} ·{" "}
-                        {moneyInr(n.seatPrice)} / seat
-                      </p>
                       {n.vibeCopy ? (
-                        <p className="mt-1 text-[12px] italic text-text-faint">
+                        <p className="mt-0.5 truncate text-[12px] text-text-faint">
                           {n.vibeCopy}
                         </p>
                       ) : null}
                     </div>
-                    <Badge
-                      tone={
-                        n.status === "OPEN"
-                          ? "success"
-                          : n.status === "FULL"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {statusLabel(n.status)}
-                    </Badge>
-                  </div>
-
-                  <InclusionChips items={chips} />
-
-                  <div className="mt-4">
-                    <div className="mb-1.5 flex justify-between text-[12px] text-text-faint">
-                      <span>
-                        {n.seatsTaken} / {n.capacity} taken
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold text-ink">
+                        {n.menu?.name ?? "No menu"}
+                      </p>
+                      {plate ? (
+                        <p className="mt-0.5 truncate text-[12px] text-text-faint">
+                          {plate}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p className="text-[13px] font-medium text-text-muted">
+                      {tableTypeLabel(n.tableType)}
+                      <span className="block text-[12px] text-text-faint">
+                        {paymentTypeLabel(n.paymentType)}
                       </span>
-                      <span>{n.seatsLeft} left</span>
+                    </p>
+                    <p className="text-[14px] font-semibold text-ink">
+                      {moneyInr(n.seatPrice)}
+                      <span className="block text-[12px] font-medium text-text-faint">
+                        / seat
+                      </span>
+                    </p>
+                    <div>
+                      <p className="text-[13px] font-semibold text-ink">
+                        {n.seatsTaken}/{n.capacity}
+                      </p>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-soft">
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{ width: `${Math.min(fill, 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-text-faint">
+                        {n.seatsLeft} left
+                      </p>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-bg-soft">
-                      <div
-                        className="h-full rounded-full bg-accent transition-[width]"
-                        style={{ width: `${Math.min(fill, 100)}%` }}
-                      />
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <Badge
+                        tone={
+                          n.status === "OPEN"
+                            ? "success"
+                            : n.status === "FULL"
+                              ? "warning"
+                              : "neutral"
+                        }
+                      >
+                        {statusLabel(n.status)}
+                      </Badge>
+                      {n.status === "OPEN" &&
+                      n.seatsTaken === 0 &&
+                      (canPublish || mockMode) ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void onCancelNight(n)}
+                          className="text-[12px] font-semibold text-text-muted hover:text-danger"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
                     </div>
-                  </div>
-                  {n.status === "OPEN" &&
-                  n.seatsTaken === 0 &&
-                  (canPublish || mockMode) ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void onCancelNight(n)}
-                      className="mt-4 text-[12px] font-semibold text-text-muted hover:text-danger"
-                    >
-                      Cancel night
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </section>
     </div>

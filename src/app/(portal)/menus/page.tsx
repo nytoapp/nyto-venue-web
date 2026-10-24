@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CategoryPicker } from "@/components/ui/CategoryPicker";
 import { Input, Label, Select, Textarea } from "@/components/ui/Field";
 import {
   EmptyState,
   ErrorBanner,
+  KpiCard,
   PageHeader,
   Skeleton,
 } from "@/components/ui/Page";
@@ -91,6 +93,7 @@ export default function MenusPage() {
     () => menus.filter((m) => menuStatus(m) === "DRAFT"),
     [menus],
   );
+  const nightCount = nights.filter((n) => n.status !== "CANCELLED").length;
 
   function resetForm() {
     setEditingId(null);
@@ -218,14 +221,14 @@ export default function MenusPage() {
     );
   }
 
-  const costPreview = Number(costPerHead);
+  const loading = menusRes.loading && !localMenus;
 
   return (
-    <div className="v-rise mx-auto w-full max-w-6xl">
+    <div className="v-rise mx-auto max-w-6xl">
       <PageHeader
         eyebrow="Kitchen"
-        title="Menus"
-        description="Build a food package. Publish locks it. Reuse it on any night."
+        title="Set menus"
+        description="Food packages for your tables. Draft freely, publish to lock for guests, then reuse on as many nights as you need."
         action={
           canPublish || mockMode ? (
             <Button
@@ -244,298 +247,307 @@ export default function MenusPage() {
       />
 
       {error ? (
-        <div className="mt-5">
+        <div className="mt-6">
           <ErrorBanner message={error} />
         </div>
       ) : null}
 
+      {loading ? (
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <KpiCard
+            label="Live packages"
+            value={live.length}
+            meta={`${menus.length} total in catalog`}
+            progress={menus.length ? (live.length / menus.length) * 100 : 0}
+            hint="Published · locked for guests"
+            tone="success"
+          />
+          <KpiCard
+            label="Drafts"
+            value={drafts.length}
+            meta="Kitchen only · not in app"
+            progress={menus.length ? (drafts.length / menus.length) * 100 : 0}
+            hint="Edit until you publish"
+            tone="warning"
+          />
+          <KpiCard
+            label="Nights using them"
+            value={nightCount}
+            meta="One menu → many nights"
+            progress={Math.min(100, nightCount * 12)}
+            hint="Reuse freely after publish"
+            tone="accent"
+          />
+        </div>
+      )}
+
       {showForm ? (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
-          <div className="grid lg:grid-cols-5">
-            <form
-              onSubmit={(e: FormEvent) => {
-                e.preventDefault();
-                void saveMenu("DRAFT");
-              }}
-              className="space-y-5 p-7 lg:col-span-3 lg:border-r lg:border-border-subtle"
-            >
-              <div>
-                <p className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
-                  {editingId ? "Edit draft" : "New menu"}
-                </p>
-                <p className="mt-1 text-[14px] text-text-muted">
-                  Guests only see it after you publish.
-                </p>
-              </div>
+        <form
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            void saveMenu("DRAFT");
+          }}
+          className="mt-8 rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-md)]"
+        >
+          <p className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+            {editingId ? "Edit draft" : "New menu"}
+          </p>
+          <p className="mt-1 text-[14px] text-text-muted">
+            Guests only see this after Publish.
+          </p>
 
-              <div>
-                <Label>Name</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Hyderabadi long table"
-                  required
-                  className="h-12 text-[16px]"
-                />
-              </div>
-
-              <div>
-                <Label>Table types</Label>
-                <CategoryPicker value={categories} onChange={setCategories} />
-              </div>
-
-              <div>
-                <Label>Courses</Label>
-                <TagInput
-                  value={courses}
-                  onChange={setCourses}
-                  placeholder="Type a course, press Enter"
-                />
-              </div>
-
-              <div>
-                <Label>Note (optional)</Label>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="One line for the room"
-                  className="min-h-[72px] text-[15px]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Dietary</Label>
-                  <Select
-                    value={dietaryType}
-                    onChange={(e) =>
-                      setDietaryType(
-                        e.target.value as
-                          | "VEGETARIAN"
-                          | "NON_VEGETARIAN"
-                          | "VEGAN",
-                      )
-                    }
-                  >
-                    <option value="NON_VEGETARIAN">Non-veg</option>
-                    <option value="VEGETARIAN">Vegetarian</option>
-                    <option value="VEGAN">Vegan</option>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Cost / head (₹)</Label>
-                  <Input
-                    inputMode="numeric"
-                    value={costPerHead}
-                    onChange={(e) => setCostPerHead(e.target.value)}
-                    placeholder="899"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Button type="submit" variant="secondary" disabled={busy}>
-                  Save draft
-                </Button>
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void saveMenu("PUBLISHED")}
-                >
-                  Publish
-                </Button>
-              </div>
-            </form>
-
-            <div className="bg-bg-soft p-7 lg:col-span-2">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                Preview
-              </p>
-              <p className="mt-3 text-[24px] font-semibold tracking-[-0.03em] text-ink">
-                {name.trim() || "Untitled"}
-              </p>
-              <p className="mt-2 text-[14px] text-text-muted">
-                {dietaryLabel(dietaryType)}
-                {categories.length
-                  ? ` · ${categories.map((c) => tableTypeLabel(c)).join(" · ")}`
-                  : ""}
-              </p>
-              {courses.length ? (
-                <ul className="mt-5 space-y-2.5">
-                  {courses.map((c) => (
-                    <li key={c} className="text-[16px] leading-snug text-ink">
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-5 text-[15px] text-text-faint">No courses yet</p>
-              )}
-              {notes.trim() ? (
-                <p className="mt-4 text-[15px] leading-relaxed text-text-muted">
-                  {notes.trim()}
-                </p>
-              ) : null}
-              <p className="mt-6 text-[16px] font-semibold text-ink">
-                {Number.isFinite(costPreview) && costPerHead !== ""
-                  ? `${moneyInr(costPreview)} / head`
-                  : "—"}
-              </p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label>Name</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Hyderabadi long table"
+                required
+                className="h-12 text-[16px]"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Table types</Label>
+              <CategoryPicker value={categories} onChange={setCategories} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Courses</Label>
+              <TagInput
+                value={courses}
+                onChange={setCourses}
+                placeholder="Course, press Enter"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Note (optional)</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="One line for the room"
+                className="min-h-[64px]"
+              />
+            </div>
+            <div>
+              <Label>Dietary</Label>
+              <Select
+                value={dietaryType}
+                onChange={(e) =>
+                  setDietaryType(
+                    e.target.value as
+                      | "VEGETARIAN"
+                      | "NON_VEGETARIAN"
+                      | "VEGAN",
+                  )
+                }
+              >
+                <option value="NON_VEGETARIAN">Non-veg</option>
+                <option value="VEGETARIAN">Vegetarian</option>
+                <option value="VEGAN">Vegan</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Kitchen cost / head (₹)</Label>
+              <Input
+                inputMode="numeric"
+                value={costPerHead}
+                onChange={(e) => setCostPerHead(e.target.value)}
+                placeholder="899"
+                required
+              />
             </div>
           </div>
-        </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button type="submit" variant="secondary" disabled={busy}>
+              Save draft
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void saveMenu("PUBLISHED")}
+            >
+              Publish & lock
+            </Button>
+          </div>
+        </form>
       ) : null}
 
-      <section className="mt-8">
-        {menusRes.loading && !localMenus ? (
+      <section className="mt-8 space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+            Live packages
+          </h2>
+          <p className="text-[13px] text-text-faint">
+            {live.length} locked · reusable
+          </p>
+        </div>
+
+        {loading ? (
           <Skeleton className="h-48" />
-        ) : menus.length === 0 ? (
+        ) : live.length === 0 && drafts.length === 0 ? (
           <EmptyState
             title="No menus yet"
             body="Create a draft, publish when ready, then schedule nights with that package."
           />
+        ) : live.length === 0 ? (
+          <EmptyState
+            title="Nothing live yet"
+            body="Publish a draft below to lock it for guests."
+          />
         ) : (
-          <div className="space-y-8">
-            {live.length > 0 ? (
-              <div>
-                <div className="mb-4 flex items-baseline justify-between gap-3">
-                  <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-ink">
-                    Live
-                    <span className="ml-2 text-[16px] font-medium text-text-faint">
-                      {live.length}
-                    </span>
-                  </h2>
-                  <p className="text-[14px] text-text-muted">
-                    Locked · reuse on any night
-                  </p>
-                </div>
-                <ul className="grid gap-4 md:grid-cols-2">
-                  {live.map((m) => {
-                    const plate = menuCourses(m);
-                    const cats = menuCategories(m);
-                    const note = menuNotes(m);
-                    const used = nightsByMenu.get(m.id) ?? 0;
-                    return (
-                      <li
-                        key={m.id}
-                        className="flex flex-col rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-sm)]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-[13px] font-semibold text-success">
-                              Live · locked
-                            </p>
-                            <h3 className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-ink">
-                              {m.name}
-                            </h3>
-                          </div>
-                        </div>
-
-                        <p className="mt-4 text-[16px] leading-relaxed text-text">
-                          {plate.join(" · ") || "—"}
+          <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
+            <div className="hidden grid-cols-[1.2fr_1.6fr_0.9fr_0.7fr_auto] gap-3 border-b border-border-subtle bg-bg-soft/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-faint md:grid">
+              <span>Menu</span>
+              <span>On the plate</span>
+              <span>Meta</span>
+              <span>Nights</span>
+              <span className="text-right">Action</span>
+            </div>
+            <ul>
+              {live.map((m) => {
+                const plate = menuCourses(m);
+                const cats = menuCategories(m);
+                const note = menuNotes(m);
+                const used = nightsByMenu.get(m.id) ?? 0;
+                return (
+                  <li
+                    key={m.id}
+                    className="grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[1.2fr_1.6fr_0.9fr_0.7fr_auto] md:items-center md:gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold text-ink">
+                        {m.name}
+                      </p>
+                      {note ? (
+                        <p className="mt-0.5 truncate text-[12px] text-text-faint">
+                          {note}
                         </p>
-                        {note ? (
-                          <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
-                            {note}
-                          </p>
-                        ) : null}
-
-                        <p className="mt-4 text-[14px] font-medium text-text-muted">
-                          {dietaryLabel(m.dietaryType)}
-                          {cats.length
-                            ? ` · ${cats.map((c) => tableTypeLabel(c)).join(" · ")}`
-                            : ""}
-                          {" · "}
-                          {moneyInr(m.costPerHead)} / head
-                          {" · "}
-                          {used} night{used === 1 ? "" : "s"}
-                        </p>
-
-                        <div className="mt-auto pt-5">
-                          <Link
-                            href={`/nights?menuId=${encodeURIComponent(m.id)}`}
-                          >
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-11 w-full text-[14px]"
-                            >
-                              Schedule night
-                            </Button>
-                          </Link>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-            {drafts.length > 0 ? (
-              <div>
-                <div className="mb-4 flex items-baseline justify-between gap-3">
-                  <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-ink">
-                    Drafts
-                    <span className="ml-2 text-[16px] font-medium text-text-faint">
-                      {drafts.length}
-                    </span>
-                  </h2>
-                  <p className="text-[14px] text-text-muted">
-                    Not visible to guests
-                  </p>
-                </div>
-                <ul className="space-y-3">
-                  {drafts.map((m) => {
-                    const plate = menuCourses(m);
-                    return (
-                      <li
-                        key={m.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between"
+                      ) : null}
+                      <div className="mt-1.5 md:hidden">
+                        <Badge tone="success">Live · locked</Badge>
+                      </div>
+                    </div>
+                    <p className="text-[14px] leading-snug text-text">
+                      {plate.join(" · ") || "—"}
+                    </p>
+                    <div>
+                      <p className="text-[13px] font-medium text-text-muted">
+                        {dietaryLabel(m.dietaryType)}
+                      </p>
+                      <p className="text-[12px] text-text-faint">
+                        {cats.map((c) => tableTypeLabel(c)).join(" · ") || "—"}
+                      </p>
+                      <p className="mt-0.5 text-[13px] font-semibold text-ink">
+                        {moneyInr(m.costPerHead)}
+                        <span className="font-medium text-text-faint">
+                          {" "}
+                          / head
+                        </span>
+                      </p>
+                    </div>
+                    <p className="text-[14px] font-semibold text-ink">
+                      {used}
+                      <span className="block text-[12px] font-medium text-text-faint">
+                        night{used === 1 ? "" : "s"}
+                      </span>
+                    </p>
+                    <div className="md:justify-self-end">
+                      <Link
+                        href={`/nights?menuId=${encodeURIComponent(m.id)}`}
                       >
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-warning">
-                            Draft
-                          </p>
-                          <h3 className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-ink">
-                            {m.name.replace(/\s*\(draft\)\s*/i, "")}
-                          </h3>
-                          <p className="mt-2 text-[16px] leading-relaxed text-text">
-                            {plate.join(" · ") || "No courses"}
-                          </p>
-                          <p className="mt-2 text-[14px] font-medium text-text-muted">
-                            {dietaryLabel(m.dietaryType)} ·{" "}
-                            {moneyInr(m.costPerHead)} / head
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-11 px-5 text-[14px]"
-                            disabled={busy}
-                            onClick={() => openEdit(m)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            className="h-11 px-5 text-[14px]"
-                            disabled={busy}
-                            onClick={() => publishExisting(m)}
-                          >
-                            Publish
-                          </Button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10 text-[13px]"
+                        >
+                          Schedule night
+                        </Button>
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </section>
+
+      {drafts.length > 0 ? (
+        <section className="mt-8 space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+              Drafts
+            </h2>
+            <p className="text-[13px] text-text-faint">
+              {drafts.length} not visible to guests
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
+            <div className="hidden grid-cols-[1.2fr_1.6fr_0.9fr_auto] gap-3 border-b border-border-subtle bg-bg-soft/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-faint md:grid">
+              <span>Menu</span>
+              <span>On the plate</span>
+              <span>Cost</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <ul>
+              {drafts.map((m) => {
+                const plate = menuCourses(m);
+                return (
+                  <li
+                    key={m.id}
+                    className="grid gap-3 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[1.2fr_1.6fr_0.9fr_auto] md:items-center"
+                  >
+                    <div>
+                      <p className="text-[15px] font-semibold text-ink">
+                        {m.name.replace(/\s*\(draft\)\s*/i, "")}
+                      </p>
+                      <div className="mt-1.5">
+                        <Badge tone="warning">Draft</Badge>
+                      </div>
+                    </div>
+                    <p className="text-[14px] leading-snug text-text">
+                      {plate.join(" · ") || "No courses"}
+                    </p>
+                    <p className="text-[14px] font-semibold text-ink">
+                      {moneyInr(m.costPerHead)}
+                      <span className="block text-[12px] font-medium text-text-faint">
+                        {dietaryLabel(m.dietaryType)} · / head
+                      </span>
+                    </p>
+                    <div className="flex flex-wrap gap-2 md:justify-end">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-10 text-[13px]"
+                        disabled={busy}
+                        onClick={() => openEdit(m)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        className="h-10 text-[13px]"
+                        disabled={busy}
+                        onClick={() => publishExisting(m)}
+                      >
+                        Publish
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
