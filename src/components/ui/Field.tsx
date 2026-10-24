@@ -7,7 +7,7 @@ import {
 
 export function Label({ children }: { children: ReactNode }) {
   return (
-    <label className="mb-1.5 block text-[12px] font-semibold tracking-[0.02em] text-text-muted">
+    <label className="mb-1.5 block text-[13px] font-semibold tracking-[0.02em] text-text-muted">
       {children}
     </label>
   );

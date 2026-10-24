@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select, Textarea } from "@/components/ui/Field";
@@ -30,13 +31,28 @@ import {
   hydrateMenu,
   menuCategories,
   menuCourses,
+  menuStatus,
 } from "@/lib/menu-meta";
 import { MOCK_MENUS, MOCK_NIGHTS } from "@/lib/mock/data";
 import type { NightRow } from "@/lib/types";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
 
+function localDayKey(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}/.test(value) && value.length <= 16) {
+    return value.slice(0, 10);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value.slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export default function NightsPage() {
+  const searchParams = useSearchParams();
+  const preselectMenuId = searchParams.get("menuId");
   const { mockMode, getToken } = useAuth();
   const { venue, canPublish } = useVenue();
   const venueId = venue?.id;
@@ -82,31 +98,65 @@ export default function NightsPage() {
       new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
   );
   const menus = menusRes.data ?? [];
+  /** Only published menus can go on a bookable night. */
+  const publishedMenus = useMemo(
+    () => menus.filter((m) => menuStatus(m) === "PUBLISHED"),
+    [menus],
+  );
   const selectedMenu = useMemo(
-    () => menus.find((m) => m.id === menuId) ?? null,
-    [menus, menuId],
+    () => publishedMenus.find((m) => m.id === menuId) ?? null,
+    [publishedMenus, menuId],
   );
 
-  function openForm() {
-    setShowForm(true);
-    setFormError(null);
-    const first = menus[0];
-    if (first && !menuId) {
-      setMenuId(first.id);
-      setInclusions(menuCourses(first));
-      const cats = menuCategories(first);
-      if (cats.length === 1) setTableType(cats[0]);
-    }
-  }
+  /** Soft warn: same published menu on the same calendar day (not a hard block). */
+  const duplicateNightHint = useMemo(() => {
+    if (!menuId || !startsLocal) return null;
+    const day = localDayKey(startsLocal);
+    const hits = nights.filter((n) => {
+      if (n.status === "CANCELLED") return false;
+      if (n.menu?.id !== menuId) return false;
+      return localDayKey(n.startsAt) === day;
+    });
+    if (hits.length === 0) return null;
+    const when = formatNightWhen(hits[0].startsAt);
+    return `Heads up: ${selectedMenu?.name ?? "this menu"} is already on ${when}. Reusing the package is fine — only skip if you meant a different night.`;
+  }, [menuId, startsLocal, nights, selectedMenu?.name]);
 
-  function onMenuChange(id: string) {
+  function applyMenu(id: string) {
     setMenuId(id);
-    const menu = menus.find((m) => m.id === id);
+    const menu = publishedMenus.find((m) => m.id === id) ?? menus.find((m) => m.id === id);
     if (!menu) return;
     const fromMenu = menuCourses(menu);
     if (fromMenu.length) setInclusions(fromMenu);
     const cats = menuCategories(menu);
     if (cats.length === 1) setTableType(cats[0]);
+  }
+
+  function openForm(preferMenuId?: string | null) {
+    setShowForm(true);
+    setFormError(null);
+    const prefer =
+      (preferMenuId &&
+        publishedMenus.find((m) => m.id === preferMenuId)?.id) ||
+      menuId ||
+      publishedMenus[0]?.id;
+    if (prefer) applyMenu(prefer);
+  }
+
+  useEffect(() => {
+    if (!preselectMenuId || menusRes.loading) return;
+    if (!publishedMenus.some((m) => m.id === preselectMenuId)) {
+      setFormError(
+        "That menu isn’t published yet. Publish it under Set menus first.",
+      );
+      return;
+    }
+    openForm(preselectMenuId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectMenuId, menusRes.loading, publishedMenus.length]);
+
+  function onMenuChange(id: string) {
+    applyMenu(id);
   }
 
   async function onCreate(e: FormEvent) {
@@ -234,16 +284,16 @@ export default function NightsPage() {
   return (
     <div className="v-rise mx-auto max-w-5xl">
       <PageHeader
-        eyebrow="Inventory"
-        title="Nights"
-        description="Publish a bookable table: time, price, menu, and what’s included. Guests see this in the app; Admin sees the same inventory."
+        eyebrow="Bookable inventory"
+        title="Publish nights"
+        description="A night is the bookable table. Pick a published menu (food package stays reused — no duplicate menus), set date, seats, and price. Guests book that night in the app."
         action={
           canPublish || mockMode ? (
             <Button
               type="button"
               onClick={() => (showForm ? setShowForm(false) : openForm())}
             >
-              {showForm ? "Close" : "New night"}
+              {showForm ? "Close" : "Schedule night"}
             </Button>
           ) : undefined
         }
@@ -329,19 +379,24 @@ export default function NightsPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-bg-soft/80 p-4">
-            <Label>Menu on this table</Label>
+            <Label>Published menu on this table</Label>
             <Select
               value={menuId}
               onChange={(e) => onMenuChange(e.target.value)}
               required
             >
-              <option value="">Select a menu…</option>
-              {menus.map((m) => (
+              <option value="">Select a published menu…</option>
+              {publishedMenus.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </Select>
+            {publishedMenus.length === 0 ? (
+              <p className="mt-2 text-[12px] text-warning">
+                No published menus yet. Go to Set menus → Publish menu first.
+              </p>
+            ) : null}
             {selectedMenu ? (
               <div className="mt-3 space-y-2">
                 <p className="text-[13px] leading-relaxed text-text-muted">
@@ -363,12 +418,21 @@ export default function NightsPage() {
                       : " · pick table type below"}
                   </p>
                 ) : null}
+                <p className="text-[11px] text-text-faint">
+                  Menu is locked — food stays as published. Changing courses
+                  means a new menu under Set menus.
+                </p>
               </div>
             ) : (
               <p className="mt-3 text-[12px] text-text-faint">
-                Create menus under Menus if the list is empty.
+                Create & publish menus under Set menus first.
               </p>
             )}
+            {duplicateNightHint ? (
+              <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-relaxed text-ink">
+                {duplicateNightHint}
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -395,8 +459,8 @@ export default function NightsPage() {
             />
           </div>
 
-          <Button type="submit" disabled={busy}>
-            {busy ? "Publishing…" : "Publish night"}
+          <Button type="submit" disabled={busy || publishedMenus.length === 0}>
+            {busy ? "Saving…" : "Publish night"}
           </Button>
         </form>
       ) : null}

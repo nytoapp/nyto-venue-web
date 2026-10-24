@@ -41,11 +41,11 @@ export function TagInput({
             key={tag}
             type="button"
             onClick={() => onChange(value.filter((t) => t !== tag))}
-            className="inline-flex items-center gap-1 rounded-lg bg-accent-wash px-2 py-1 text-[12px] font-semibold text-accent-deep"
+            className="inline-flex items-center gap-1 rounded-lg bg-bg-soft px-2.5 py-1.5 text-[14px] font-medium text-ink transition hover:bg-danger/5"
             title="Remove"
           >
             {tag}
-            <span className="text-accent-deep/60">×</span>
+            <span className="text-text-faint">×</span>
           </button>
         ))}
         <input
@@ -55,7 +55,7 @@ export function TagInput({
           onBlur={() => add(draft)}
           placeholder={value.length >= max ? "Max reached" : placeholder}
           disabled={value.length >= max}
-          className="min-w-[140px] flex-1 border-0 bg-transparent px-1 py-1 text-[13px] text-ink outline-none placeholder:text-text-faint"
+          className="min-w-[140px] flex-1 border-0 bg-transparent px-1 py-1.5 text-[15px] text-ink outline-none placeholder:text-text-faint"
         />
       </div>
     </div>
