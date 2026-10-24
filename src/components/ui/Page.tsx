@@ -42,20 +42,26 @@ export function KpiCard({
   value,
   hint,
   tone = "default",
+  /** e.g. "of 8 paid seats" — shown under the number */
+  meta,
+  /** 0–100 fill for the meter bar */
+  progress,
 }: {
   label: string;
   value: string | number;
   hint: string;
   tone?: "default" | "success" | "warning" | "accent";
+  meta?: string;
+  progress?: number;
 }) {
-  const accentBar =
+  const shell =
     tone === "success"
-      ? "bg-success"
+      ? "border-success/20 bg-gradient-to-br from-success/10 via-white to-white"
       : tone === "warning"
-        ? "bg-warning"
+        ? "border-warning/25 bg-gradient-to-br from-warning/10 via-white to-white"
         : tone === "accent"
-          ? "bg-accent"
-          : "bg-border";
+          ? "border-accent/25 bg-gradient-to-br from-accent/10 via-white to-white"
+          : "border-border bg-white";
   const valueColor =
     tone === "success"
       ? "text-success"
@@ -64,18 +70,49 @@ export function KpiCard({
         : tone === "accent"
           ? "text-accent-deep"
           : "text-ink";
+  const bar =
+    tone === "success"
+      ? "bg-success"
+      : tone === "warning"
+        ? "bg-warning"
+        : tone === "accent"
+          ? "bg-accent"
+          : "bg-ink/30";
+  const pct =
+    progress == null
+      ? null
+      : Math.max(0, Math.min(100, Math.round(progress)));
+
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border bg-white p-4 shadow-[var(--shadow-sm)]">
-      <div className={`absolute inset-x-0 top-0 h-1 ${accentBar}`} />
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
-        {label}
-      </p>
+    <div
+      className={`relative overflow-hidden rounded-2xl border p-5 shadow-[var(--shadow-sm)] ${shell}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[12px] font-semibold tracking-[-0.01em] text-text-muted">
+          {label}
+        </p>
+        <span
+          className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${bar}`}
+          aria-hidden
+        />
+      </div>
       <p
-        className={`mt-2 text-[36px] font-semibold leading-none tracking-[-0.05em] ${valueColor}`}
+        className={`mt-3 text-[42px] font-semibold leading-none tracking-[-0.05em] ${valueColor}`}
       >
         {value}
       </p>
-      <p className="mt-2 text-[12px] leading-snug text-text-muted">{hint}</p>
+      {meta ? (
+        <p className="mt-1.5 text-[12px] font-medium text-text-faint">{meta}</p>
+      ) : null}
+      {pct != null ? (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/5">
+          <div
+            className={`h-full rounded-full transition-[width] ${bar}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      ) : null}
+      <p className="mt-3 text-[12px] leading-snug text-text-muted">{hint}</p>
     </div>
   );
 }

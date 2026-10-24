@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Badge, doorTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/Page";
 import { checkInGuest, listDoorBookings } from "@/lib/api/venue";
 import {
-  formatClock,
+  bookingTableLabel,
   guestLabel,
   isSameIstDay,
+  moneyInr,
   statusLabel,
+  tableTypeLabel,
 } from "@/lib/format";
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
@@ -23,13 +25,13 @@ import type { DoorBooking } from "@/lib/types";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
 
-type Filter = "ALL" | "CONFIRMED" | "ATTENDED" | "NO_SHOW";
+type Filter = "ALL" | "WAITING" | "ATTENDED";
 
 export default function DoorPage() {
   const { mockMode, getToken } = useAuth();
   const { venue } = useVenue();
   const venueId = venue?.id;
-  const [filter, setFilter] = useState<Filter>("CONFIRMED");
+  const [filter, setFilter] = useState<Filter>("WAITING");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(
@@ -38,6 +40,12 @@ export default function DoorPage() {
   const [localBookings, setLocalBookings] = useState<DoorBooking[] | null>(
     null,
   );
+
+  // Always start blank when opening this page (no leftover / autofill junk).
+  useEffect(() => {
+    setCode("");
+    setFlash(null);
+  }, [venueId]);
 
   const bookingsRes = useVenueResource(
     Boolean(venueId),
@@ -55,21 +63,28 @@ export default function DoorPage() {
     [bookings],
   );
 
-  const visible = tonight.filter((b) =>
-    filter === "ALL" ? true : b.status === filter,
-  );
+  const isWaiting = (status: string) =>
+    status === "CONFIRMED" || status === "NO_SHOW";
+
+  const visible = tonight.filter((b) => {
+    if (filter === "ALL") return true;
+    if (filter === "WAITING") return isWaiting(b.status);
+    return b.status === "ATTENDED";
+  });
 
   const counts = {
     ALL: tonight.length,
-    CONFIRMED: tonight.filter((b) => b.status === "CONFIRMED").length,
+    WAITING: tonight.filter((b) => isWaiting(b.status)).length,
     ATTENDED: tonight.filter((b) => b.status === "ATTENDED").length,
-    NO_SHOW: tonight.filter((b) => b.status === "NO_SHOW").length,
   };
 
   async function runCheckIn(rawCode: string) {
     const trimmed = rawCode.trim().toUpperCase();
     if (trimmed.length < 4) {
-      setFlash({ ok: false, text: "Enter the guest check-in code from the app." });
+      setFlash({
+        ok: false,
+        text: "Type the code from the guest’s NYTO app, then confirm.",
+      });
       return;
     }
     setBusy(true);
@@ -101,7 +116,7 @@ export default function DoorPage() {
           );
           setFlash({
             ok: true,
-            text: `Checked in ${guestLabel(hit.user)} · ${hit.seatsBooked} seat${hit.seatsBooked === 1 ? "" : "s"}`,
+            text: `${guestLabel(hit.user)} checked in · ${hit.seatsBooked} seat${hit.seatsBooked === 1 ? "" : "s"}`,
           });
           setFilter("ATTENDED");
         }
@@ -134,32 +149,38 @@ export default function DoorPage() {
   return (
     <div className="v-rise mx-auto max-w-5xl">
       <PageHeader
-        eyebrow="Front of house"
-        title="Door"
-        description="Guest shows the app check-in code → you confirm. Marks Checked in only — never refunds or cancels."
+        eyebrow="At the door"
+        title="Check-in"
+        description="Guest shows the code from the NYTO app. Type it once above → they move to Checked in. The list below is who to expect."
       />
 
       <form
         onSubmit={onCheckIn}
         className="mt-8 rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-md)]"
+        autoComplete="off"
       >
-        <Label>Check-in code</Label>
+        <Label>Guest check-in code</Label>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row">
           <Input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="AK7M2P"
+            placeholder="Type code here"
+            name="nyto-checkin-code"
+            id="nyto-checkin-code"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="characters"
             spellCheck={false}
+            inputMode="text"
             autoFocus
             className="h-14 font-mono text-[22px] tracking-[0.22em] uppercase sm:flex-1"
           />
           <Button
             type="submit"
-            disabled={busy}
+            disabled={busy || code.trim().length < 4}
             className="h-14 min-w-[160px] text-[15px]"
           >
-            {busy ? "Checking…" : "Check in"}
+            {busy ? "Confirming…" : "Confirm arrival"}
           </Button>
         </div>
         {flash ? (
@@ -174,18 +195,44 @@ export default function DoorPage() {
           </p>
         ) : mockMode ? (
           <p className="mt-3 text-[12px] text-text-faint">
-            Demo: AK7M2P · CX1N8T · DH3W5Y
+            Demo tip — try typing{" "}
+            <button
+              type="button"
+              className="font-mono font-semibold text-accent-deep hover:underline"
+              onClick={() => setCode("AK7M2P")}
+            >
+              AK7M2P
+            </button>
+            {" · "}
+            <button
+              type="button"
+              className="font-mono font-semibold text-accent-deep hover:underline"
+              onClick={() => setCode("CX1N8T")}
+            >
+              CX1N8T
+            </button>
+            {" · "}
+            <button
+              type="button"
+              className="font-mono font-semibold text-accent-deep hover:underline"
+              onClick={() => setCode("DH3W5Y")}
+            >
+              DH3W5Y
+            </button>
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-3 text-[12px] text-text-faint">
+            Field stays empty until you type or tap Confirm on a guest below.
+          </p>
+        )}
       </form>
 
       <div className="mt-8 flex flex-wrap gap-2">
         {(
           [
-            ["CONFIRMED", "Expected"],
+            ["WAITING", "Waiting"],
             ["ATTENDED", "Checked in"],
-            ["ALL", "All"],
-            ["NO_SHOW", "No-show"],
+            ["ALL", "All guests"],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -217,45 +264,54 @@ export default function DoorPage() {
           <Skeleton className="h-56" />
         ) : visible.length === 0 ? (
           <EmptyState
-            title="Nobody in this filter"
-            body="Expected = paid, not arrived. Checked in = door done. Stuck? Open Support."
+            title="No guests in this list"
+            body="Waiting = paid, not checked in yet. Checked in = confirmed at the door."
           />
         ) : (
           <ul className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
-            {visible.map((b) => (
-              <li
-                key={b.id}
-                className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-4 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="text-[15px] font-semibold text-ink">
-                    {guestLabel(b.user)}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-text-faint">
-                    <span className="font-mono tracking-wide text-text-muted">
-                      {b.checkInCode ?? "—"}
-                    </span>
-                    {" · "}
-                    {formatClock(b.table.startsAt)} · {b.seatsBooked} seat
-                    {b.seatsBooked === 1 ? "" : "s"}
-                    {b.user.phone ? ` · ${b.user.phone}` : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={doorTone(b.status)}>{statusLabel(b.status)}</Badge>
-                  {b.status === "CONFIRMED" && b.checkInCode ? (
-                    <Button
-                      type="button"
-                      className="h-9 px-3 text-[12px]"
-                      disabled={busy}
-                      onClick={() => void runCheckIn(b.checkInCode!)}
-                    >
-                      Check in
-                    </Button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+            {visible.map((b) => {
+              const table = bookingTableLabel(b.table);
+              return (
+                <li
+                  key={b.id}
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-4 last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold text-ink">
+                      {guestLabel(b.user)}
+                    </p>
+                    <p className="mt-1 text-[13px] font-medium text-ink">
+                      Table · {table.title}
+                      <span className="font-normal text-text-muted">
+                        {" "}
+                        · {table.subtitle}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-text-faint">
+                      <span className="font-mono tracking-wide text-text-muted">
+                        {b.checkInCode ?? "—"}
+                      </span>
+                      {" · "}
+                      {b.seatsBooked} seat{b.seatsBooked === 1 ? "" : "s"}
+                      {" · "}
+                      {moneyInr(b.amountPaid ?? b.payment?.amount)}
+                      {b.payment?.method
+                        ? ` · ${b.payment.method.toUpperCase() === "CARD" ? "Card" : b.payment.method}`
+                        : ""}
+                      {b.user.phone ? ` · ${b.user.phone}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="neutral">
+                      {tableTypeLabel(b.table.tableType)}
+                    </Badge>
+                    <Badge tone={doorTone(b.status)}>
+                      {statusLabel(b.status)}
+                    </Badge>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

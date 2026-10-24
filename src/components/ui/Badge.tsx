@@ -25,7 +25,7 @@ export function Badge({
 export function doorTone(status: string): keyof typeof toneClass {
   const s = status.toUpperCase();
   if (s === "ATTENDED") return "success";
-  if (s === "CONFIRMED") return "accent";
-  if (s === "NO_SHOW") return "neutral";
+  // CONFIRMED + NO_SHOW both read as “not arrived” on the venue floor.
+  if (s === "CONFIRMED" || s === "NO_SHOW") return "accent";
   return "neutral";
 }

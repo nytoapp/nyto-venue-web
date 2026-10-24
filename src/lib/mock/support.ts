@@ -21,13 +21,32 @@ export const MOCK_TICKETS: SupportTicket[] = [
     id: "t2",
     subject: "Need capacity bump for Saturday couples night",
     category: "NIGHT",
-    message: "Can we open 2 more seats on 26 Oct 20:00? Waitlist interest is high.",
+    message:
+      "Can we open 2 more seats on the couples night? Waitlist interest is high.",
     status: "IN_REVIEW",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
   },
+  {
+    id: "t3",
+    subject: "Guest phone on booking doesn’t match ID at door",
+    category: "BOOKING",
+    message:
+      "Meera Iyer — code FM2P9Q. She verified email. Seated after photo ID check.",
+    status: "OPEN",
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+  },
+  {
+    id: "t4",
+    subject: "Card payment shows on guest app but lagged on door list",
+    category: "PAYMENT",
+    message:
+      "Kabir & Nisha — code GN5R1S. They paid; we confirmed arrival. Flagging for ledger check.",
+    status: "RESOLVED",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+  },
 ];
 
-const KEY = "nyto_venue_support_tickets";
+const KEY = "nyto_venue_support_tickets_v2";
 
 export function loadTickets(): SupportTicket[] {
   if (typeof window === "undefined") return MOCK_TICKETS;
@@ -47,7 +66,7 @@ export function saveTickets(tickets: SupportTicket[]) {
 
 export function categoryLabel(c: SupportTicket["category"]): string {
   const map = {
-    DOOR: "Door / check-in",
+    DOOR: "Check-in / arrivals",
     BOOKING: "Guest booking",
     NIGHT: "Night inventory",
     PAYMENT: "Payment / refund",

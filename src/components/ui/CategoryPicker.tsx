@@ -26,7 +26,7 @@ export function CategoryPicker({
             key={cat.id}
             type="button"
             onClick={() => toggle(cat.id)}
-            className={`rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition ${
+            className={`rounded-lg border px-3.5 py-2 text-[14px] font-semibold transition ${
               on
                 ? "border-accent bg-accent-wash text-accent-deep"
                 : "border-border bg-white text-text-muted hover:border-accent/35 hover:text-ink"

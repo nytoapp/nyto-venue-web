@@ -28,6 +28,8 @@ export type MenuRow = {
   costPerHead: number;
   /** Table categories this menu is built for (Weekly / Women-led / Couples / Singles). */
   categories?: Array<"WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES" | string>;
+  /** Draft = kitchen package only. Published = can attach to a bookable night. */
+  publishStatus?: "DRAFT" | "PUBLISHED";
   createdAt?: string;
 };
 
@@ -75,6 +77,12 @@ export type DoorBooking = {
     startsAt: string;
     status: string;
     seatPrice: number;
+    tableType?: string | null;
+    paymentType?: string | null;
+    vibeCopy?: string | null;
+    capacity?: number | null;
+    menuName?: string | null;
+    menuId?: string | null;
   };
   payment: {
     id: string;

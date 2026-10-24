@@ -77,9 +77,9 @@ export default function SupportPage() {
   return (
     <div className="v-rise mx-auto max-w-5xl">
       <PageHeader
-        eyebrow="NYTO ops"
-        title="Support"
-        description={`Message Admin for ${venue?.name ?? "your venue"} — door issues, paid-night cancels, guest disputes. Don’t invent refunds on the floor.`}
+        eyebrow="NYTO operations"
+        title="Contact NYTO"
+        description={`Send a problem to Admin for ${venue?.name ?? "your venue"} — check-in issues, paid-night cancels, guest disputes. Don’t invent refunds yourself.`}
         action={
           <Button type="button" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Close" : "New request"}
@@ -88,9 +88,9 @@ export default function SupportPage() {
       />
 
       <p className="mt-4 rounded-xl border border-border bg-white px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
-        Urgent at the door? Seat the guest if you can verify name/phone, then
-        file a <span className="font-semibold text-ink">Door</span> request so
-        Admin has a record.
+        Guest stuck at check-in? Seat them if you can verify name/phone, then
+        file a <span className="font-semibold text-ink">Check-in</span> request
+        so Admin has a record.
       </p>
 
       {sentFlash ? (
@@ -121,7 +121,7 @@ export default function SupportPage() {
                 setCategory(e.target.value as SupportTicket["category"])
               }
             >
-              <option value="DOOR">Door / check-in</option>
+              <option value="DOOR">Check-in / arrivals</option>
               <option value="BOOKING">Guest booking</option>
               <option value="NIGHT">Night inventory</option>
               <option value="PAYMENT">Payment / refund</option>

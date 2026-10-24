@@ -5,12 +5,33 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
 
+/** Labels a venue manager understands at a glance — not jargon. */
 const NAV = [
-  { href: "/tonight", label: "Tonight", hint: "Arrivals & KPIs" },
-  { href: "/door", label: "Door", hint: "Check-in codes" },
-  { href: "/nights", label: "Nights", hint: "Tables + inclusions" },
-  { href: "/menus", label: "Menus", hint: "Courses & cost" },
-  { href: "/support", label: "Support", hint: "Ask Admin" },
+  {
+    href: "/tonight",
+    label: "Today's guests",
+    hint: "Who paid for tonight",
+  },
+  {
+    href: "/door",
+    label: "Check-in",
+    hint: "Confirm guests at the door",
+  },
+  {
+    href: "/nights",
+    label: "Publish nights",
+    hint: "Create bookable tables",
+  },
+  {
+    href: "/menus",
+    label: "Set menus",
+    hint: "Build & publish packages",
+  },
+  {
+    href: "/support",
+    label: "Contact NYTO",
+    hint: "Report a problem to ops",
+  },
 ];
 
 export function VenueShell({ children }: { children: React.ReactNode }) {
@@ -31,7 +52,7 @@ export function VenueShell({ children }: { children: React.ReactNode }) {
                 NYTO Venue
               </p>
               <p className="text-[13px] font-semibold leading-tight text-white">
-                Partner floor
+                Your venue portal
               </p>
             </div>
           </div>
@@ -83,7 +104,9 @@ export function VenueShell({ children }: { children: React.ReactNode }) {
                     : "text-sidebar-muted hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="block text-[14px] font-semibold">{item.label}</span>
+                <span className="block text-[14px] font-semibold">
+                  {item.label}
+                </span>
                 <span
                   className={`block text-[11px] ${active ? "text-white/75" : "text-sidebar-muted"}`}
                 >

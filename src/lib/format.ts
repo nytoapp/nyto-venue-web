@@ -58,10 +58,11 @@ export function isSameIstDay(iso: string, ref = new Date()): boolean {
 
 export function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    CONFIRMED: "Expected",
+    CONFIRMED: "Waiting",
     ATTENDED: "Checked in",
-    NO_SHOW: "No-show",
-    OPEN: "Open",
+    // Venue floor: waiting vs checked in. No-show is an Admin mark later.
+    NO_SHOW: "Waiting",
+    OPEN: "Bookable",
     FULL: "Full",
     CANCELLED: "Cancelled",
     CLOSED: "Closed",
@@ -96,6 +97,20 @@ export function paymentTypeLabel(v: string | null | undefined): string {
     PAY_OWN_BILL: "Pay own bill",
   };
   return map[v] ?? v;
+}
+
+/** Which supper-table / night this booking sits on — what venue staff need at the door. */
+export function bookingTableLabel(table: {
+  menuName?: string | null;
+  tableType?: string | null;
+  startsAt: string;
+}): { title: string; subtitle: string } {
+  const title = table.menuName?.trim() || "Tonight’s table";
+  const subtitle = [
+    tableTypeLabel(table.tableType),
+    formatClock(table.startsAt),
+  ].join(" · ");
+  return { title, subtitle };
 }
 
 /** Split menu description into chips when · / commas used. */
