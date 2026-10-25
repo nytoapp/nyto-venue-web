@@ -56,6 +56,11 @@ export type NightRow = {
   menu: NightMenuRef | null;
   seatsTaken: number;
   seatsLeft: number;
+  /** Confirmed/attended paid seats (not pending holds). */
+  paidSeats?: number;
+  /** Below min-to-run (3) — Instant fill + may cancel with refund. */
+  underfilled?: boolean;
+  minSeatsToRun?: number;
 };
 
 export type DoorBooking = {
