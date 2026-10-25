@@ -60,6 +60,7 @@ export default function NightsPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [localNights, setLocalNights] = useState<NightRow[] | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<NightRow | null>(null);
 
   const [menuId, setMenuId] = useState("");
   const [startsLocal, setStartsLocal] = useState("");
@@ -114,6 +115,20 @@ export default function NightsPage() {
   const seatsLeft = bookable.reduce((s, n) => s + n.seatsLeft, 0);
   const seatsTaken = bookable.reduce((s, n) => s + n.seatsTaken, 0);
   const capacityTotal = bookable.reduce((s, n) => s + n.capacity, 0) || 1;
+
+  const { needsAttention, onTheBoard } = useMemo(() => {
+    const attention: NightRow[] = [];
+    const board: NightRow[] = [];
+    for (const n of nights) {
+      const paid = n.paidSeats ?? n.seatsTaken;
+      const minRun = n.minSeatsToRun ?? 3;
+      const under =
+        n.status === "OPEN" && (n.underfilled ?? paid < minRun);
+      if (under) attention.push(n);
+      else board.push(n);
+    }
+    return { needsAttention: attention, onTheBoard: board };
+  }, [nights]);
 
   const duplicateNightHint = useMemo(() => {
     if (!menuId || !startsLocal) return null;
@@ -252,14 +267,22 @@ export default function NightsPage() {
     }
   }
 
-  async function onCancelNight(night: NightRow) {
-    if (night.seatsTaken > 0) {
+  function requestCancelNight(night: NightRow) {
+    const paid = night.paidSeats ?? night.seatsTaken;
+    const minRun = night.minSeatsToRun ?? 3;
+    if (paid >= minRun) {
       setFormError(
-        "Paid seats already exist — open Contact NYTO so Admin can cancel/refund.",
+        `This night has ${paid} paid seats (min to run is ${minRun}). Contact NYTO to cancel.`,
       );
       return;
     }
-    if (!confirm(`Cancel ${formatNightWhen(night.startsAt)}?`)) return;
+    setFormError(null);
+    setCancelTarget(night);
+  }
+
+  async function confirmCancelNight() {
+    const night = cancelTarget;
+    if (!night) return;
     setBusy(true);
     setFormError(null);
     try {
@@ -269,6 +292,7 @@ export default function NightsPage() {
             n.id === night.id ? { ...n, status: "CANCELLED" } : n,
           ),
         );
+        setCancelTarget(null);
         return;
       }
       const token = await getToken();
@@ -276,8 +300,10 @@ export default function NightsPage() {
       await patchNight(token, venueId, night.id, { status: "CANCELLED" });
       setLocalNights(null);
       await nightsRes.reload();
+      setCancelTarget(null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Cancel failed");
+      setCancelTarget(null);
     } finally {
       setBusy(false);
     }
@@ -488,126 +514,287 @@ export default function NightsPage() {
         </form>
       ) : null}
 
-      <section className="mt-8 space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
-            Nights on the board
-          </h2>
-          <p className="text-[13px] text-text-faint">
-            {nights.length} night{nights.length === 1 ? "" : "s"}
-          </p>
+      {loading ? (
+        <div className="mt-8 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
         </div>
-
-        {loading ? (
-          <Skeleton className="h-64" />
-        ) : nights.length === 0 ? (
+      ) : nights.length === 0 ? (
+        <div className="mt-8">
           <EmptyState
             title="No nights yet"
             body="Schedule a night with a published menu so guests can book in the app."
           />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
-            <div className="hidden grid-cols-[1.1fr_1.3fr_0.7fr_0.7fr_0.85fr_auto] gap-3 border-b border-border-subtle bg-bg-soft/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-faint md:grid">
-              <span>When</span>
-              <span>Menu</span>
-              <span>Type</span>
-              <span>Price</span>
-              <span>Seats</span>
-              <span className="text-right">Status</span>
-            </div>
-            <ul>
-              {nights.map((n) => {
-                const fill =
-                  n.capacity > 0
-                    ? Math.round((n.seatsTaken / n.capacity) * 100)
-                    : 0;
-                const plate =
-                  n.inclusions?.length
-                    ? n.inclusions.join(" · ")
-                    : null;
-                return (
-                  <li
-                    key={n.id}
-                    className="grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[1.1fr_1.3fr_0.7fr_0.7fr_0.85fr_auto] md:items-center md:gap-3"
-                  >
-                    <div>
-                      <p className="text-[15px] font-semibold text-ink">
-                        {formatNightWhen(n.startsAt)}
-                      </p>
-                      {n.vibeCopy ? (
-                        <p className="mt-0.5 truncate text-[12px] text-text-faint">
-                          {n.vibeCopy}
+        </div>
+      ) : (
+        <>
+          {needsAttention.length > 0 ? (
+            <section className="mt-8 space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+                    Action needed
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-text-faint">
+                    Under the guest minimum — cancel refunds anyone who’s paid
+                  </p>
+                </div>
+                <p className="text-[13px] tabular-nums text-text-faint">
+                  {needsAttention.length}
+                </p>
+              </div>
+              <ul className="overflow-hidden rounded-2xl border border-warning/30 bg-white shadow-[var(--shadow-sm)]">
+                {needsAttention.map((n) => {
+                  const paid = n.paidSeats ?? n.seatsTaken;
+                  const minRun = n.minSeatsToRun ?? 3;
+                  const fill =
+                    n.capacity > 0
+                      ? Math.round((n.seatsTaken / n.capacity) * 100)
+                      : 0;
+                  const canCancel = canPublish || mockMode;
+                  return (
+                    <li
+                      key={n.id}
+                      className="flex flex-col gap-3 border-b border-border-subtle px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[16px] font-semibold tracking-[-0.02em] text-ink">
+                            {formatNightWhen(n.startsAt)}
+                          </p>
+                          <Badge tone="warning">Needs guests</Badge>
+                        </div>
+                        <p className="mt-1 truncate text-[13px] text-text-muted">
+                          {[
+                            n.menu?.name ?? "No menu",
+                            tableTypeLabel(n.tableType),
+                            moneyInr(n.seatPrice),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
-                      ) : null}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold text-ink">
-                        {n.menu?.name ?? "No menu"}
-                      </p>
-                      {plate ? (
-                        <p className="mt-0.5 truncate text-[12px] text-text-faint">
-                          {plate}
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="text-[13px] font-medium text-text-muted">
-                      {tableTypeLabel(n.tableType)}
-                      <span className="block text-[12px] text-text-faint">
-                        {paymentTypeLabel(n.paymentType)}
-                      </span>
-                    </p>
-                    <p className="text-[14px] font-semibold text-ink">
-                      {moneyInr(n.seatPrice)}
-                      <span className="block text-[12px] font-medium text-text-faint">
-                        / seat
-                      </span>
-                    </p>
-                    <div>
-                      <p className="text-[13px] font-semibold text-ink">
-                        {n.seatsTaken}/{n.capacity}
-                      </p>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-soft">
-                        <div
-                          className="h-full rounded-full bg-accent"
-                          style={{ width: `${Math.min(fill, 100)}%` }}
-                        />
+                        <div className="mt-3 max-w-xs">
+                          <div className="flex items-baseline justify-between gap-2 text-[12px]">
+                            <span className="font-semibold tabular-nums text-ink">
+                              {paid}/{n.capacity} paid
+                            </span>
+                            <span className="text-text-faint">
+                              need {minRun} to run
+                            </span>
+                          </div>
+                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-soft">
+                            <div
+                              className="h-full rounded-full bg-warning"
+                              style={{ width: `${Math.min(fill, 100)}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <p className="mt-1 text-[11px] text-text-faint">
-                        {n.seatsLeft} left
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-start gap-2 md:items-end">
-                      <Badge
-                        tone={
-                          n.status === "OPEN"
-                            ? "success"
-                            : n.status === "FULL"
-                              ? "warning"
-                              : "neutral"
-                        }
-                      >
-                        {statusLabel(n.status)}
-                      </Badge>
-                      {n.status === "OPEN" &&
-                      n.seatsTaken === 0 &&
-                      (canPublish || mockMode) ? (
-                        <button
+                      {canCancel ? (
+                        <Button
                           type="button"
+                          variant="danger"
+                          className="h-11 shrink-0 self-start sm:self-center"
                           disabled={busy}
-                          onClick={() => void onCancelNight(n)}
-                          className="text-[12px] font-semibold text-text-muted hover:text-danger"
+                          onClick={() => requestCancelNight(n)}
                         >
-                          Cancel
-                        </button>
+                          {paid === 0 ? "Cancel night" : "Cancel & refund"}
+                        </Button>
                       ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="mt-8 space-y-3">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+                  On the board
+                </h2>
+                <p className="mt-0.5 text-[13px] text-text-faint">
+                  Live tables guests can book
+                </p>
+              </div>
+              <p className="text-[13px] tabular-nums text-text-faint">
+                {onTheBoard.length}
+              </p>
+            </div>
+
+            {onTheBoard.length === 0 ? (
+              <EmptyState
+                title="Nothing else on the board"
+                body="Healthy nights land here. Underfilled ones stay in Action needed above."
+              />
+            ) : (
+              <ul className="overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--shadow-sm)]">
+                <li className="hidden grid-cols-[minmax(0,1.5fr)_7.5rem_6.5rem_auto] gap-4 border-b border-border-subtle bg-bg-soft/70 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-faint md:grid">
+                  <span>When</span>
+                  <span>Seats</span>
+                  <span>Price</span>
+                  <span className="text-right">Status</span>
+                </li>
+                {onTheBoard.map((n) => {
+                  const fill =
+                    n.capacity > 0
+                      ? Math.round((n.seatsTaken / n.capacity) * 100)
+                      : 0;
+                  const cancelled = n.status === "CANCELLED";
+                  const tone =
+                    cancelled
+                      ? "neutral"
+                      : n.status === "FULL"
+                        ? "warning"
+                        : "success";
+                  return (
+                    <li
+                      key={n.id}
+                      className={`grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_7.5rem_6.5rem_auto] md:items-center md:gap-4 ${
+                        cancelled ? "opacity-60" : ""
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
+                          {formatNightWhen(n.startsAt)}
+                        </p>
+                        <p className="mt-0.5 truncate text-[13px] text-text-muted">
+                          {[
+                            n.menu?.name ?? "No menu",
+                            tableTypeLabel(n.tableType),
+                            paymentTypeLabel(n.paymentType),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[14px] font-semibold tabular-nums text-ink">
+                          {n.seatsTaken}/{n.capacity}
+                        </p>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-soft">
+                          <div
+                            className="h-full rounded-full bg-accent"
+                            style={{ width: `${Math.min(fill, 100)}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] text-text-faint">
+                          {n.seatsLeft} left
+                        </p>
+                      </div>
+                      <p className="text-[14px] font-semibold tabular-nums text-ink">
+                        {moneyInr(n.seatPrice)}
+                      </p>
+                      <div className="md:justify-self-end">
+                        <Badge tone={tone}>{statusLabel(n.status)}</Badge>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+
+      {cancelTarget ? (
+        <CancelNightModal
+          night={cancelTarget}
+          busy={busy}
+          onClose={() => {
+            if (!busy) setCancelTarget(null);
+          }}
+          onConfirm={() => void confirmCancelNight()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CancelNightModal({
+  night,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  night: NightRow;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const paid = night.paidSeats ?? night.seatsTaken;
+  const minRun = night.minSeatsToRun ?? 3;
+  const withRefund = paid > 0;
+  const when = formatNightWhen(night.startsAt);
+  const menuName = night.menu?.name ?? "This night";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancel-night-title"
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-lg)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-danger">
+          {withRefund ? "Cancel & refund" : "Cancel night"}
+        </p>
+        <h3
+          id="cancel-night-title"
+          className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-ink"
+        >
+          {when}
+        </h3>
+        <p className="mt-1 text-[14px] text-text-muted">{menuName}</p>
+
+        {withRefund ? (
+          <div className="mt-5 space-y-2 rounded-xl border border-danger/15 bg-danger/5 px-4 py-3 text-[14px] leading-relaxed text-text">
+            <p>
+              Only <span className="font-semibold text-ink">{paid}</span> paid
+              seat{paid === 1 ? "" : "s"} — need {minRun} to run.
+            </p>
+            <p className="text-text-muted">
+              Guests get a full refund and a notification that the night is off.
+            </p>
           </div>
+        ) : (
+          <p className="mt-5 text-[14px] leading-relaxed text-text-muted">
+            No paid seats yet. This night comes off the board and guests can no
+            longer book it.
+          </p>
         )}
-      </section>
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Keep night
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy
+              ? "Cancelling…"
+              : withRefund
+                ? "Cancel & refund guests"
+                : "Cancel night"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
