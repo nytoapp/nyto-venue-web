@@ -14,24 +14,31 @@ export const TABLE_CATEGORIES: { id: TableCategory; label: string }[] = [
 const CAT_LINE = /^Categories:\s*(.+)$/im;
 const STATUS_LINE = /^Status:\s*(Draft|Published)$/im;
 
-/** Encode courses + notes + categories + publish status into description. */
+/**
+ * Encode courses + notes into description.
+ * Categories/status are first-class API columns — only embed them when
+ * `legacyEncode` is true (mock / pre-migration compat).
+ */
 export function buildMenuDescription(input: {
   courses: string[];
   notes?: string;
   categories: TableCategory[];
   status?: MenuPublishStatus;
+  legacyEncode?: boolean;
 }): string {
   const lines: string[] = [];
   if (input.courses.length) lines.push(input.courses.join(" · "));
   if (input.notes?.trim()) lines.push(input.notes.trim());
-  if (input.categories.length) {
+  if (input.legacyEncode) {
+    if (input.categories.length) {
+      lines.push(
+        `Categories: ${input.categories.map((c) => tableTypeLabel(c)).join(" · ")}`,
+      );
+    }
     lines.push(
-      `Categories: ${input.categories.map((c) => tableTypeLabel(c)).join(" · ")}`,
+      `Status: ${input.status === "DRAFT" ? "Draft" : "Published"}`,
     );
   }
-  lines.push(
-    `Status: ${input.status === "DRAFT" ? "Draft" : "Published"}`,
-  );
   return lines.join("\n");
 }
 

@@ -14,7 +14,12 @@ import {
   Skeleton,
 } from "@/components/ui/Page";
 import { TagInput } from "@/components/ui/TagInput";
-import { createMenu, listMenus, listNights } from "@/lib/api/venue";
+import {
+  createMenu,
+  listMenus,
+  listNights,
+  patchMenu,
+} from "@/lib/api/venue";
 import { dietaryLabel, moneyInr, tableTypeLabel } from "@/lib/format";
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
 import {
@@ -156,6 +161,7 @@ export default function MenusPage() {
       notes,
       categories,
       status: as,
+      legacyEncode: mockMode,
     });
     if (description.length > 500) {
       setError(
@@ -195,21 +201,30 @@ export default function MenusPage() {
         resetForm();
         return;
       }
-      if (editingId) {
-        setError("API can’t edit yet — create a new draft instead.");
-        return;
-      }
       if (!canPublish) {
         throw new Error("NYTO-curated venue — menus are published in Admin.");
       }
       const token = await getToken();
       if (!token || !venueId) throw new Error("Not signed in");
-      await createMenu(token, venueId, {
-        name: name.trim(),
-        description,
-        dietaryType,
-        costPerHead: cost,
-      });
+      if (editingId) {
+        await patchMenu(token, venueId, editingId, {
+          name: name.trim(),
+          description,
+          dietaryType,
+          costPerHead: cost,
+          publishStatus: as,
+          categories,
+        });
+      } else {
+        await createMenu(token, venueId, {
+          name: name.trim(),
+          description,
+          dietaryType,
+          costPerHead: cost,
+          publishStatus: as,
+          categories,
+        });
+      }
       setLocalMenus(null);
       await menusRes.reload();
       setShowForm(false);
@@ -221,16 +236,49 @@ export default function MenusPage() {
     }
   }
 
-  function publishExisting(menu: MenuRow) {
-    if (!mockMode) {
-      setError(
-        "Live API can’t update drafts yet — open New menu, fill the same package, and choose Publish & lock.",
+  async function publishExisting(menu: MenuRow) {
+    if (mockMode) {
+      setLocalMenus(
+        menus.map((m) =>
+          m.id === menu.id ? withMenuStatus(m, "PUBLISHED") : m,
+        ),
       );
       return;
     }
-    setLocalMenus(
-      menus.map((m) => (m.id === menu.id ? withMenuStatus(m, "PUBLISHED") : m)),
-    );
+    if (!canPublish) {
+      setError("NYTO-curated venue — menus are published in Admin.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      if (!token || !venueId) throw new Error("Not signed in");
+      const published = withMenuStatus(menu, "PUBLISHED");
+      const bodyDesc = buildMenuDescription({
+        courses: menuCourses(published),
+        notes: menuNotes(published),
+        categories: menuCategories(published),
+        status: "PUBLISHED",
+      });
+      await patchMenu(token, venueId, menu.id, {
+        name: published.name.replace(/\s*\(draft\)\s*/i, "").trim(),
+        description: bodyDesc || undefined,
+        dietaryType: published.dietaryType as
+          | "VEGETARIAN"
+          | "NON_VEGETARIAN"
+          | "VEGAN",
+        costPerHead: published.costPerHead,
+        publishStatus: "PUBLISHED",
+        categories: menuCategories(published),
+      });
+      setLocalMenus(null);
+      await menusRes.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not publish menu");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const loading = menusRes.loading && !localMenus;
