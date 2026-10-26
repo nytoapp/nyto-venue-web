@@ -19,7 +19,13 @@ export default function PortalLayout({
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-text-muted">
+        Redirecting to sign-in…
+      </div>
+    );
+  }
 
   return (
     <VenueProvider>

@@ -116,10 +116,15 @@ export default function NightsPage() {
   const seatsTaken = bookable.reduce((s, n) => s + n.seatsTaken, 0);
   const capacityTotal = bookable.reduce((s, n) => s + n.capacity, 0) || 1;
 
-  const { needsAttention, onTheBoard } = useMemo(() => {
+  const { needsAttention, onTheBoard, cancelledNights } = useMemo(() => {
     const attention: NightRow[] = [];
     const board: NightRow[] = [];
+    const cancelled: NightRow[] = [];
     for (const n of nights) {
+      if (n.status === "CANCELLED") {
+        cancelled.push(n);
+        continue;
+      }
       const paid = n.paidSeats ?? n.seatsTaken;
       const minRun = n.minSeatsToRun ?? 3;
       const under =
@@ -127,7 +132,11 @@ export default function NightsPage() {
       if (under) attention.push(n);
       else board.push(n);
     }
-    return { needsAttention: attention, onTheBoard: board };
+    return {
+      needsAttention: attention,
+      onTheBoard: board,
+      cancelledNights: cancelled,
+    };
   }, [nights]);
 
   const duplicateNightHint = useMemo(() => {
@@ -187,8 +196,8 @@ export default function NightsPage() {
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    const price = Number(seatPrice);
-    const caps = Number(capacity);
+    const price = Math.round(Number(seatPrice));
+    const caps = Math.round(Number(capacity));
     if (!startsLocal) {
       setFormError("Pick date & time for the night.");
       return;
@@ -197,8 +206,8 @@ export default function NightsPage() {
       setFormError("Pick a published menu.");
       return;
     }
-    if (!Number.isFinite(price) || price <= 0) {
-      setFormError("Set the seat price guests will pay (₹).");
+    if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(price)) {
+      setFormError("Set a whole-rupee seat price guests will pay (₹).");
       return;
     }
     if (!Number.isFinite(caps) || caps < 2 || caps > 12) {
@@ -537,7 +546,7 @@ export default function NightsPage() {
                     Action needed
                   </h2>
                   <p className="mt-0.5 text-[13px] text-text-faint">
-                    Under the guest minimum — cancel refunds anyone who’s paid
+                    Under the guest minimum — cancel & refund anyone who’s paid
                   </p>
                 </div>
                 <p className="text-[13px] tabular-nums text-text-faint">
@@ -642,19 +651,12 @@ export default function NightsPage() {
                     n.capacity > 0
                       ? Math.round((n.seatsTaken / n.capacity) * 100)
                       : 0;
-                  const cancelled = n.status === "CANCELLED";
                   const tone =
-                    cancelled
-                      ? "neutral"
-                      : n.status === "FULL"
-                        ? "warning"
-                        : "success";
+                    n.status === "FULL" ? "warning" : "success";
                   return (
                     <li
                       key={n.id}
-                      className={`grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_7.5rem_6.5rem_auto] md:items-center md:gap-4 ${
-                        cancelled ? "opacity-60" : ""
-                      }`}
+                      className="grid gap-2 border-b border-border-subtle px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_7.5rem_6.5rem_auto] md:items-center md:gap-4"
                     >
                       <div className="min-w-0">
                         <p className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
@@ -696,6 +698,44 @@ export default function NightsPage() {
               </ul>
             )}
           </section>
+
+          {cancelledNights.length > 0 ? (
+            <section className="mt-8 space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+                    Cancelled
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-text-faint">
+                    Off the board · not bookable
+                  </p>
+                </div>
+                <p className="text-[13px] tabular-nums text-text-faint">
+                  {cancelledNights.length}
+                </p>
+              </div>
+              <ul className="overflow-hidden rounded-2xl border border-border bg-white opacity-80 shadow-[var(--shadow-sm)]">
+                {cancelledNights.map((n) => (
+                  <li
+                    key={n.id}
+                    className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-3.5 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold text-ink">
+                        {formatNightWhen(n.startsAt)}
+                      </p>
+                      <p className="mt-0.5 truncate text-[13px] text-text-muted">
+                        {[n.menu?.name ?? "No menu", tableTypeLabel(n.tableType)]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <Badge tone="neutral">{statusLabel(n.status)}</Badge>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </>
       )}
 
