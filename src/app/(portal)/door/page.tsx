@@ -21,6 +21,10 @@ import {
 } from "@/lib/format";
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
+import {
+  applyMockFloorAttendance,
+  markMockBookingAttended,
+} from "@/lib/mock/floor";
 import type { DoorBooking } from "@/lib/types";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
@@ -50,7 +54,9 @@ export default function DoorPage() {
   const bookingsRes = useVenueResource(
     Boolean(venueId),
     async (token) => {
-      if (mockMode) return structuredClone(MOCK_BOOKINGS);
+      if (mockMode) {
+        return applyMockFloorAttendance(structuredClone(MOCK_BOOKINGS));
+      }
       const res = await listDoorBookings(token, venueId!);
       return res.bookings;
     },
@@ -103,6 +109,7 @@ export default function DoorPage() {
             text: `${guestLabel(hit.user)} is already checked in.`,
           });
         } else {
+          markMockBookingAttended(hit.id);
           setLocalBookings(
             bookings.map((b) =>
               b.id === hit.id
@@ -125,8 +132,11 @@ export default function DoorPage() {
       }
       const token = await getToken();
       if (!token || !venueId) throw new Error("Not signed in");
-      await checkInGuest(token, venueId, trimmed);
-      setFlash({ ok: true, text: `Checked in · ${trimmed}` });
+      const result = await checkInGuest(token, venueId, trimmed);
+      const who = result.booking?.user
+        ? guestLabel(result.booking.user)
+        : trimmed;
+      setFlash({ ok: true, text: `${who} checked in · ${trimmed}` });
       setCode("");
       setLocalBookings(null);
       setFilter("ATTENDED");
@@ -222,7 +232,7 @@ export default function DoorPage() {
           </p>
         ) : (
           <p className="mt-3 text-[12px] text-text-faint">
-            Field stays empty until you type or tap Confirm on a guest below.
+            Type the code, or tap Confirm on a waiting guest below.
           </p>
         )}
       </form>
@@ -308,6 +318,16 @@ export default function DoorPage() {
                     <Badge tone={doorTone(b.status)}>
                       {statusLabel(b.status)}
                     </Badge>
+                    {isWaiting(b.status) && b.checkInCode ? (
+                      <Button
+                        type="button"
+                        className="h-10 text-[13px]"
+                        disabled={busy}
+                        onClick={() => void runCheckIn(b.checkInCode!)}
+                      >
+                        Confirm
+                      </Button>
+                    ) : null}
                   </div>
                 </li>
               );

@@ -79,7 +79,7 @@ export default function SupportPage() {
       <PageHeader
         eyebrow="NYTO operations"
         title="Contact NYTO"
-        description={`Send a problem to Admin for ${venue?.name ?? "your venue"} — check-in issues, paid-night cancels, guest disputes. Don’t invent refunds yourself.`}
+        description={`Send a problem for ${venue?.name ?? "your venue"} — check-in issues, paid-night cancels, guest disputes. Don’t invent refunds yourself.`}
         action={
           <Button type="button" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Close" : "New request"}
@@ -89,20 +89,21 @@ export default function SupportPage() {
 
       <p className="mt-4 rounded-xl border border-border bg-white px-4 py-3 text-[13px] text-text-muted shadow-[var(--shadow-sm)]">
         Guest stuck at check-in? Seat them if you can verify name/phone, then
-        file a <span className="font-semibold text-ink">Check-in</span> request
-        so Admin has a record.
+        file a <span className="font-semibold text-ink">Check-in</span> request.
+        Requests are saved in this browser for the demo — they don’t reach Admin
+        email yet.
       </p>
 
       {sentFlash ? (
         <div className="mt-4 rounded-xl border border-success/25 bg-success/10 px-4 py-3 text-[13px] font-medium text-success">
-          Sent to NYTO ops. Status updates show below.
+          Saved. Demo inbox below — live ops routing comes next.
         </div>
       ) : null}
 
       {showForm ? (
         <form
           onSubmit={onSubmit}
-          className="mt-6 space-y-4 rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-sm)]"
+          className="mt-6 space-y-4 rounded-2xl border border-border bg-white p-6 shadow-[var(--shadow-md)]"
         >
           <div>
             <Label>Subject</Label>

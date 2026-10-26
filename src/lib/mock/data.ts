@@ -12,17 +12,41 @@ export const MOCK_VENUE: VenueRow = {
   staffRole: "OWNER",
 };
 
+/** Calendar Y-M-D in Asia/Kolkata for “now”. */
+function istYmd(offsetDays = 0): { y: number; m: number; d: number } {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const base = new Date(Date.now() + offsetDays * 86_400_000);
+  const parts = fmt.formatToParts(base);
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const m = Number(parts.find((p) => p.type === "month")?.value);
+  const d = Number(parts.find((p) => p.type === "day")?.value);
+  return { y, m, d };
+}
+
+/** ISO instant for a clock time on an IST calendar day (demo floor). */
+function istAt(
+  offsetDays: number,
+  hour: number,
+  minute = 0,
+): string {
+  const { y, m, d } = istYmd(offsetDays);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return new Date(
+    `${y}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00+05:30`,
+  ).toISOString();
+}
+
 function tonightAt(hour: number, minute = 0): string {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return d.toISOString();
+  return istAt(0, hour, minute);
 }
 
 function daysFromNow(days: number, hour: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
+  return istAt(days, hour, 0);
 }
 
 export const MOCK_MENUS: MenuRow[] = [

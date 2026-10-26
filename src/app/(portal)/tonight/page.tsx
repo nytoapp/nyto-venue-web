@@ -24,6 +24,7 @@ import {
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
 import { computeTonightKpis } from "@/lib/kpi";
 import { MOCK_BOOKINGS, MOCK_NIGHTS } from "@/lib/mock/data";
+import { applyMockFloorAttendance } from "@/lib/mock/floor";
 import type { DoorBooking } from "@/lib/types";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
@@ -54,7 +55,9 @@ export default function TonightPage() {
   const bookingsRes = useVenueResource(
     Boolean(venueId),
     async (token) => {
-      if (mockMode) return MOCK_BOOKINGS;
+      if (mockMode) {
+        return applyMockFloorAttendance(structuredClone(MOCK_BOOKINGS));
+      }
       const res = await listDoorBookings(token, venueId!);
       return res.bookings;
     },

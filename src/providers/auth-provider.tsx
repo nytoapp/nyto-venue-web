@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import {
+  clearActiveVenueId,
   clearSession,
   getAccessToken,
   getRefreshToken,
@@ -189,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await apiLogout(token, getRefreshToken());
     clearSession();
+    clearActiveVenueId();
     setUser(null);
     setToken(null);
     router.replace("/login");

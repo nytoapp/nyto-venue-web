@@ -157,6 +157,12 @@ export default function MenusPage() {
       categories,
       status: as,
     });
+    if (description.length > 500) {
+      setError(
+        `Menu details are ${description.length} characters — trim courses or notes to 500 max.`,
+      );
+      return;
+    }
     setBusy(true);
     try {
       if (mockMode) {
@@ -216,6 +222,12 @@ export default function MenusPage() {
   }
 
   function publishExisting(menu: MenuRow) {
+    if (!mockMode) {
+      setError(
+        "Live API can’t update drafts yet — open New menu, fill the same package, and choose Publish & lock.",
+      );
+      return;
+    }
     setLocalMenus(
       menus.map((m) => (m.id === menu.id ? withMenuStatus(m, "PUBLISHED") : m)),
     );
