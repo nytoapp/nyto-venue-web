@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
   const [masked, setMasked] = useState("");
+  const [otpHint, setOtpHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +25,13 @@ export default function LoginPage() {
     try {
       const res = await requestOtp(email);
       setMasked(res.maskedEmail);
+      setOtpHint(
+        mockMode || res.otpSent
+          ? null
+          : res.deliveryMode === "skipped_test"
+            ? "Test destination — use your configured test OTP (email was not sent)."
+            : "Email provider is off — code was not emailed. Use a test OTP or configure Resend.",
+      );
       setCode("");
       setStep("code");
     } catch (err) {
@@ -127,8 +135,14 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={onVerify} className="mt-7 space-y-4">
               <p className="text-[13px] text-text-muted">
-                Code sent to <span className="font-semibold text-ink">{masked}</span>
+                {otpHint ? "Code ready for" : "Code sent to"}{" "}
+                <span className="font-semibold text-ink">{masked}</span>
               </p>
+              {otpHint ? (
+                <p className="text-[12px] leading-relaxed text-amber-800">
+                  {otpHint}
+                </p>
+              ) : null}
               <div>
                 <Label>6-digit code</Label>
                 <OtpInput value={code} onChange={setCode} />

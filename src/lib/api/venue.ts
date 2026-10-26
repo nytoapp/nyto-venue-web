@@ -22,6 +22,8 @@ export async function createMenu(
     description?: string;
     dietaryType: "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN";
     costPerHead: number;
+    publishStatus?: "DRAFT" | "PUBLISHED";
+    categories?: Array<"WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES">;
   },
 ) {
   return apiRequest<{ ok: true; menu: MenuRow }>(`/venue/${venueId}/menus`, {
@@ -29,6 +31,29 @@ export async function createMenu(
     method: "POST",
     body,
   });
+}
+
+export async function patchMenu(
+  token: string,
+  venueId: string,
+  menuId: string,
+  body: {
+    name?: string;
+    description?: string;
+    dietaryType?: "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN";
+    costPerHead?: number;
+    publishStatus?: "DRAFT" | "PUBLISHED";
+    categories?: Array<"WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES">;
+  },
+) {
+  return apiRequest<{ ok: true; menu: MenuRow }>(
+    `/venue/${venueId}/menus/${menuId}`,
+    {
+      token,
+      method: "PATCH",
+      body,
+    },
+  );
 }
 
 export async function listNights(token: string, venueId: string) {

@@ -38,7 +38,11 @@ type AuthState = {
   token: string | null;
   error: string | null;
   mockMode: boolean;
-  requestOtp: (email: string) => Promise<{ maskedEmail: string }>;
+  requestOtp: (email: string) => Promise<{
+    maskedEmail: string;
+    otpSent?: boolean;
+    deliveryMode?: string;
+  }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
