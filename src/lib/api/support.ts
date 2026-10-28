@@ -3,7 +3,7 @@ import { apiRequest } from "@/lib/api/client";
 export type SupportTicket = {
   id: string;
   subject: string;
-  category: "DOOR" | "BOOKING" | "NIGHT" | "PAYMENT" | "OTHER";
+  category: "DOOR" | "BOOKING" | "NIGHT" | "PAYMENT" | "FEEDBACK" | "OTHER";
   message: string;
   status: "OPEN" | "IN_REVIEW" | "RESOLVED";
   createdAt: string;
