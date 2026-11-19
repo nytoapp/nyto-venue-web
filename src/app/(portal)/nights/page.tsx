@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/venue";
 import {
   formatNightWhen,
+  istDayKey,
   moneyInr,
   paymentTypeLabel,
   statusLabel,
@@ -37,18 +38,6 @@ import { MOCK_MENUS, MOCK_NIGHTS } from "@/lib/mock/data";
 import type { NightRow } from "@/lib/types";
 import { useAuth } from "@/providers/auth-provider";
 import { useVenue } from "@/providers/venue-provider";
-
-function localDayKey(value: string): string {
-  if (/^\d{4}-\d{2}-\d{2}/.test(value) && value.length <= 16) {
-    return value.slice(0, 10);
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value.slice(0, 10);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export default function NightsPage() {
   const searchParams = useSearchParams();
@@ -141,11 +130,11 @@ export default function NightsPage() {
 
   const duplicateNightHint = useMemo(() => {
     if (!menuId || !startsLocal) return null;
-    const day = localDayKey(startsLocal);
+    const day = istDayKey(startsLocal);
     const hits = nights.filter((n) => {
       if (n.status === "CANCELLED") return false;
       if (n.menu?.id !== menuId) return false;
-      return localDayKey(n.startsAt) === day;
+      return istDayKey(n.startsAt) === day;
     });
     if (hits.length === 0) return null;
     return `Same menu already on ${formatNightWhen(hits[0].startsAt)} — fine if intentional.`;
@@ -802,7 +791,7 @@ function CancelNightModal({
               seat{paid === 1 ? "" : "s"} — need {minRun} to run.
             </p>
             <p className="text-text-muted">
-              Guests get a full refund and a notification that the night is off.
+              Paid seats are refunded in full. Guests are not sent a separate message.
             </p>
           </div>
         ) : (

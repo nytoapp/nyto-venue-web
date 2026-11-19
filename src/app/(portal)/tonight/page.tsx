@@ -16,13 +16,12 @@ import {
   bookingTableLabel,
   formatNightWhen,
   guestLabel,
-  isSameIstDay,
   moneyInr,
   statusLabel,
   tableTypeLabel,
 } from "@/lib/format";
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
-import { computeTonightKpis } from "@/lib/kpi";
+import { computeTonightKpis, selectTonightBookings } from "@/lib/kpi";
 import { MOCK_BOOKINGS, MOCK_NIGHTS } from "@/lib/mock/data";
 import { applyMockFloorAttendance } from "@/lib/mock/floor";
 import type { DoorBooking } from "@/lib/types";
@@ -69,7 +68,7 @@ export default function TonightPage() {
   const kpis = computeTonightKpis(nights, bookings);
 
   const tonightBookings = useMemo(
-    () => bookings.filter((b) => isSameIstDay(b.table.startsAt)),
+    () => selectTonightBookings(bookings),
     [bookings],
   );
 
