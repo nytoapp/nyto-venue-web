@@ -20,6 +20,17 @@ export type TonightKpis = {
   nextNight: NightRow | null;
 };
 
+/** Paid guests whose night starts today in IST and is still on the board. */
+export function selectTonightBookings(
+  bookings: DoorBooking[],
+  now = new Date(),
+): DoorBooking[] {
+  return bookings.filter((b) => {
+    if (b.table.status === "CANCELLED") return false;
+    return isSameIstDay(b.table.startsAt, now);
+  });
+}
+
 export function computeTonightKpis(
   nights: NightRow[],
   bookings: DoorBooking[],
@@ -28,13 +39,8 @@ export function computeTonightKpis(
   const nightsTonight = nights.filter(
     (n) => n.status !== "CANCELLED" && isSameIstDay(n.startsAt, now),
   );
-  const tonightIds = new Set(nightsTonight.map((n) => n.id));
 
-  const tonightBookings = bookings.filter((b) =>
-    tonightIds.size > 0
-      ? tonightIds.has(b.table.id)
-      : isSameIstDay(b.table.startsAt, now),
-  );
+  const tonightBookings = selectTonightBookings(bookings, now);
 
   const expectedGuests = tonightBookings
     .filter((b) => b.status === "CONFIRMED")

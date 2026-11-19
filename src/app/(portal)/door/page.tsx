@@ -14,12 +14,12 @@ import { checkInGuest, listDoorBookings } from "@/lib/api/venue";
 import {
   bookingTableLabel,
   guestLabel,
-  isSameIstDay,
   moneyInr,
   statusLabel,
   tableTypeLabel,
 } from "@/lib/format";
 import { useVenueResource } from "@/lib/hooks/useVenueResource";
+import { selectTonightBookings } from "@/lib/kpi";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
 import {
   applyMockFloorAttendance,
@@ -65,7 +65,7 @@ export default function DoorPage() {
 
   const bookings = localBookings ?? bookingsRes.data ?? [];
   const tonight = useMemo(
-    () => bookings.filter((b) => isSameIstDay(b.table.startsAt)),
+    () => selectTonightBookings(bookings),
     [bookings],
   );
 

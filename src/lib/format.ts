@@ -46,6 +46,22 @@ export function formatClock(iso: string): string {
   }).format(d);
 }
 
+/** Calendar day in Asia/Kolkata. Datetime-local values stay as typed. */
+export function istDayKey(value: string): string {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return trimmed.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 export function isSameIstDay(iso: string, ref = new Date()): boolean {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
